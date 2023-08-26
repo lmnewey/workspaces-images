@@ -1,0 +1,150 @@
+ARG BASE_TAG="develop-rolling"
+ARG BASE_IMAGE="core-nvidia-focal"
+FROM kasmweb/$BASE_IMAGE:$BASE_TAG
+
+USER root
+
+ENV HOME /home/kasm-default-profile
+ENV STARTUPDIR /dockerstartup
+WORKDIR $HOME
+
+### LN Mods here
+ENV WINE_INST_SCRIPTS $STARTUPDIR/install
+ENV TEAMS_INST_SCRIPTS $STARTUPDIR/install
+
+### Envrionment config
+ENV DEBIAN_FRONTEND=noninteractive \
+    SKIP_CLEAN=true \
+    KASM_RX_HOME=$STARTUPDIR/kasmrx \
+    DONT_PROMPT_WSL_INSTALL="No_Prompt_please" \
+    INST_DIR=$STARTUPDIR/install \
+    INST_SCRIPTS="/ubuntu/install/tools/install_tools_deluxe.sh \
+                  /ubuntu/install/misc/install_tools.sh \
+                  /ubuntu/install/chrome/install_chrome.sh \
+                  /ubuntu/install/sublime_text/install_sublime_text.sh \
+                  /ubuntu/install/vs_code/install_vs_code.sh \
+                  /ubuntu/install/nextcloud/install_nextcloud.sh \
+                  /ubuntu/install/remmina/install_remmina.sh \                  
+                  /ubuntu/install/signal/install_signal.sh \                  
+                  /ubuntu/install/ansible/install_ansible.sh \
+                  /ubuntu/install/terraform/install_terraform.sh \
+                  /ubuntu/install/telegram/install_telegram.sh \                  
+                  /ubuntu/install/cleanup/cleanup.sh"
+## removed the following as they are not needed in the dev stack
+# /ubuntu/install/only_office/install_only_office.sh \
+#/ubuntu/install/gimp/install_gimp.sh \
+#/ubuntu/install/zoom/install_zoom.sh \
+#/ubuntu/install/obs/install_obs.sh \
+#/ubuntu/install/thunderbird/install_thunderbird.sh \
+#/ubuntu/install/gamepad_utils/install_gamepad_utils.sh \
+#/ubuntu/install/chromium/install_chromium.sh \
+#/ubuntu/install/firefox/install_firefox.sh \
+
+RUN apt-get update -y
+
+RUN apt install iputils-ping
+
+
+# install apt packages
+RUN apt-get update && apt-get install -y \
+        python3-pip libasound2 libegl1-mesa libgl1-mesa-glx \
+        libxcomposite1 libxcursor1 libxi6 libxrandr2 libxss1 \
+        libxtst6 gdal-bin ffmpeg vlc dnsutils iputils-ping \
+        git remmina remmina-plugin-rdp
+
+# update pip and install python packages
+COPY resources/install_python_packages.sh /tmp/
+RUN bash /tmp/install_python_packages.sh
+
+# Install Anaconda3
+COPY resources/install_anaconda.sh /tmp/
+RUN bash /tmp/install_anaconda.sh
+
+# Install packages in conda environment
+USER 1000
+COPY resources/install_conda_packages.sh /tmp/
+RUN bash /tmp/install_conda_packages.sh
+USER root 
+
+# Install nvtop
+COPY resources/install_nvtop.sh /tmp/
+RUN bash /tmp/install_nvtop.sh
+
+# QGIS
+COPY resources/install_qgis.sh /tmp/
+RUN bash /tmp/install_qgis.sh
+
+# Install Visual Studio Code
+#install VS code
+COPY resources/install_vscode.sh /tmp/
+RUN bash /tmp/install_vscode.sh
+
+# Install PyCharm
+RUN cd /opt/ \
+    && wget https://download.jetbrains.com/python/pycharm-community-2021.1.1.tar.gz \
+    && tar xvf pycharm-community-*.tar.gz \
+    && rm -rf pycharm-community-*.tar.gz \
+    && mv /opt/pycharm-community-2021.1.1 /opt/pycharm
+
+# Copy install scripts
+COPY ./src/ $INST_DIR
+
+
+# COPY ./src/ubuntu/install/wine $WINE_INST_SCRIPTS/wine/
+# RUN bash $WINE_INST_SCRIPTS/wine/install_wine.sh  && rm -rf $WINE_INST_SCRIPTS/wine/
+# Run installations
+RUN \
+  for SCRIPT in $INST_SCRIPTS; do \
+    bash ${INST_DIR}${SCRIPT}; \
+  done && \
+  $STARTUPDIR/set_user_permission.sh $HOME && \
+  rm -f /etc/X11/xinit/Xclients && \
+  chown 1000:0 $HOME && \
+  mkdir -p /home/kasm-user && \
+  chown -R 1000:0 /home/kasm-user && \
+  rm -Rf ${INST_DIR}
+
+## change language back to en_AU
+RUN apt install language-pack-en-base language-pack-en
+RUN locale-gen en_AU
+RUN sudo update-locale LANG=en_AU
+
+
+#ADD ./src/common/scripts $STARTUPDIR
+RUN $STARTUPDIR/set_user_permission.sh $HOME
+
+RUN chown 1000:0 $HOME
+
+# COPY ./src/ubuntu/install/steam $INST_SCRIPTS/steam/
+# RUN bash $INST_SCRIPTS/steam/install_steam.sh  
+# RUN rm -rf $INST_SCRIPTS/steam/
+# disabled steam for the DEV stack. its not needed
+# RUN set -ex
+# RUN dpkg --add-architecture i386
+# RUN apt-get update
+
+# RUN apt-get install -y steam-installer
+# RUN cp /usr/share/applications/steam.desktop $HOME/Desktop/
+# RUN chmod +x $HOME/Desktop/steam.desktop
+# RUN chown 1000:1000 $HOME/Desktop/steam.desktop
+
+
+# Create desktop shortcuts
+COPY resources/spyder.desktop $HOME/Desktop/
+COPY resources/jupyter.desktop $HOME/Desktop/
+COPY resources/pycharm.desktop ${HOME}/Desktop/
+RUN cp /usr/share/applications/org.remmina.Remmina.desktop $HOME/Desktop/ \
+    && chmod +x $HOME/Desktop/org.remmina.Remmina.desktop \
+    && chown 1000:1000 $HOME/Desktop/org.remmina.Remmina.desktop
+
+# Userspace Runtime
+ENV HOME /home/kasm-user
+WORKDIR $HOME
+USER 1000
+
+#install power level 10k
+RUN git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
+
+
+CMD ["--tail-log"]
+

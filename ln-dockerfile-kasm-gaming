@@ -1,0 +1,106 @@
+ARG BASE_TAG="develop-rolling"
+ARG BASE_IMAGE="core-nvidia-focal"
+FROM kasmweb/$BASE_IMAGE:$BASE_TAG
+
+USER root
+
+ENV HOME /home/kasm-default-profile
+ENV STARTUPDIR /dockerstartup
+WORKDIR $HOME
+
+### LN Mods here
+ENV WINE_INST_SCRIPTS $STARTUPDIR/install
+ENV TEAMS_INST_SCRIPTS $STARTUPDIR/install
+
+### Envrionment config
+ENV DEBIAN_FRONTEND=noninteractive \
+    SKIP_CLEAN=true \
+    KASM_RX_HOME=$STARTUPDIR/kasmrx \
+    DONT_PROMPT_WSL_INSTALL="No_Prompt_please" \
+    INST_DIR=$STARTUPDIR/install \
+    INST_SCRIPTS="/ubuntu/install/tools/install_tools_deluxe.sh \
+                  /ubuntu/install/misc/install_tools.sh \
+                  /ubuntu/install/chrome/install_chrome.sh \                  
+                  /ubuntu/install/cleanup/cleanup.sh"
+RUN apt-get update -y
+
+RUN apt install iputils-ping
+
+
+# install apt packages
+RUN apt-get update && apt-get install -y \
+        python3-pip libasound2 libegl1-mesa libgl1-mesa-glx \
+        libxcomposite1 libxcursor1 libxi6 libxrandr2 libxss1 \
+        libxtst6 gdal-bin ffmpeg vlc dnsutils iputils-ping \
+        git remmina remmina-plugin-rdp
+
+# Install nvtop
+COPY resources/install_nvtop.sh /tmp/
+RUN bash /tmp/install_nvtop.sh
+
+# Copy install scripts
+COPY ./src/ $INST_DIR
+
+
+COPY ./src/ubuntu/install/wine $WINE_INST_SCRIPTS/wine/
+RUN bash $WINE_INST_SCRIPTS/wine/install_wine.sh  && rm -rf $WINE_INST_SCRIPTS/wine/
+# Run installations
+RUN \
+  for SCRIPT in $INST_SCRIPTS; do \
+    bash ${INST_DIR}${SCRIPT}; \
+  done && \
+  $STARTUPDIR/set_user_permission.sh $HOME && \
+  rm -f /etc/X11/xinit/Xclients && \
+  chown 1000:0 $HOME && \
+  mkdir -p /home/kasm-user && \
+  chown -R 1000:0 /home/kasm-user && \
+  rm -Rf ${INST_DIR}
+
+### Install WINE
+#COPY ./src/ubuntu/install/wine $INST_SCRIPTS/wine/
+
+#ADD ./src/common/scripts $STARTUPDIR
+RUN $STARTUPDIR/set_user_permission.sh $HOME
+
+RUN chown 1000:0 $HOME
+
+# COPY ./src/ubuntu/install/steam $INST_SCRIPTS/steam/
+# RUN bash $INST_SCRIPTS/steam/install_steam.sh  
+# RUN rm -rf $INST_SCRIPTS/steam/
+RUN set -ex
+RUN dpkg --add-architecture i386
+RUN apt-get update
+
+RUN apt-get install -y steam-installer
+RUN cp /usr/share/applications/steam.desktop $HOME/Desktop/
+RUN chmod +x $HOME/Desktop/steam.desktop
+RUN chown 1000:1000 $HOME/Desktop/steam.desktop
+
+
+# Create desktop shortcuts
+COPY resources/spyder.desktop $HOME/Desktop/
+COPY resources/jupyter.desktop $HOME/Desktop/
+COPY resources/pycharm.desktop ${HOME}/Desktop/
+RUN cp /usr/share/applications/org.remmina.Remmina.desktop $HOME/Desktop/ \
+    && chmod +x $HOME/Desktop/org.remmina.Remmina.desktop \
+    && chown 1000:1000 $HOME/Desktop/org.remmina.Remmina.desktop
+
+#do create an export for steam to see if this fixes anything
+RUN export LD_PRELOAD=/usr/lib64/VirtualGL/libdlfaker.so
+
+## change language back to en_AU
+RUN apt install language-pack-en-base language-pack-en
+RUN locale-gen en_AU
+RUN sudo update-locale LANG=en_AU
+
+# Userspace Runtime
+ENV HOME /home/kasm-user
+WORKDIR $HOME
+USER 1000
+
+#install power level 10k
+RUN git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
+
+
+CMD ["--tail-log"]
+
