@@ -38,6 +38,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # Copy install scripts
 COPY ./src/ $INST_DIR
+COPY ./images/desktop1.png /usr/share/extra/backgrounds/bg_default.png
 
 # Run installations
 RUN \
@@ -57,10 +58,13 @@ RUN locale-gen en_AU
 RUN sudo update-locale LANG=en_AU
 
 
-RUN wget https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
-RUN sudo dpkg -i packages-microsoft-prod.deb
-RUN sudo apt-get update && \
-  sudo apt-get install -y dotnet-sdk-7.0
+RUN sudo apt update
+RUN sudo apt install -y openjdk-11-jdk
+RUN sudo add-apt-repository -y ppa:maarten-fonville/android-studio
+RUN sudo apt update
+RUN sudo apt install android-studio -y
+
+
 
 # Userspace Runtime
 ENV HOME /home/kasm-user

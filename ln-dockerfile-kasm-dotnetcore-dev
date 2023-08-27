@@ -67,6 +67,7 @@ RUN sudo apt-get update && \
 RUN apt install language-pack-en-base language-pack-en
 RUN locale-gen en_AU
 RUN sudo update-locale LANG=en_AU
+COPY ./images/desktop4.png /usr/share/extra/backgrounds/bg_default.png
 
 # Userspace Runtime
 ENV HOME /home/kasm-user

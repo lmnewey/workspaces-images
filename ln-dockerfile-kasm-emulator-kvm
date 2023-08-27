@@ -64,6 +64,7 @@ RUN sudo apt-get install -y dotnet-sdk-7.0
 RUN sudo apt -y install bridge-utils cpu-checker libvirt-clients libvirt-daemon qemu qemu-kvm
 RUN sudo apt install -y virt-manager ebtables cpu-checker
 
+COPY ./images/desktop5.png /usr/share/extra/backgrounds/bg_default.png
 #=============
 # UI Packages
 #-------------

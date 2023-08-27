@@ -65,7 +65,7 @@ RUN sudo apt -y install bridge-utils cpu-checker libvirt-clients libvirt-daemon 
 RUN sudo apt install -y virt-manager ebtables cpu-checker
 
 #RUN sudo apt install sudo -y virtualbox 
-
+COPY ./images/desktop3.png /usr/share/extra/backgrounds/bg_default.png
 
 
 # Userspace Runtime
