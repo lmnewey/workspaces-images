@@ -1,0 +1,127 @@
+#ARG BASE_TAG="develop"
+#ARG BASE_IMAGE="docker2.newey.id.au/jetson/l4t-base:alpha2"
+#FROM kasmweb/$BASE_IMAGE:$BASE_TAG
+FROM docker2.newey.id.au/jetson/l4t-base:alpha2
+
+USER root
+
+ENV HOME /home/kasm-default-profile
+ENV STARTUPDIR /dockerstartup
+WORKDIR $HOME
+
+### Envrionment config
+ENV DEBIAN_FRONTEND=noninteractive \
+    SKIP_CLEAN=true \
+    KASM_RX_HOME=$STARTUPDIR/kasmrx \
+    DONT_PROMPT_WSL_INSTALL="No_Prompt_please" \
+    INST_DIR=$STARTUPDIR/install \
+    INST_SCRIPTS="/ubuntu/install/tools/install_tools_deluxe.sh \
+                  /ubuntu/install/misc/install_tools.sh \
+                  /ubuntu/install/chrome/install_chrome.sh \
+                  /ubuntu/install/sublime_text/install_sublime_text.sh \
+                  /ubuntu/install/vs_code/install_vs_code.sh \
+                  /ubuntu/install/nextcloud/install_nextcloud.sh \
+                  /ubuntu/install/remmina/install_remmina.sh \                  
+                  /ubuntu/install/signal/install_signal.sh \                  
+                  /ubuntu/install/ansible/install_ansible.sh \
+                  /ubuntu/install/terraform/install_terraform.sh \
+                  /ubuntu/install/telegram/install_telegram.sh \                 
+                  /ubuntu/install/chromium/install_chromium.sh \ 
+                  /ubuntu/install/firefox/install_firefox.sh \
+                  /ubuntu/install/cleanup/cleanup.sh"
+## removed the following as they are not needed in the dev stack
+# /ubuntu/install/only_office/install_only_office.sh \
+#/ubuntu/install/gimp/install_gimp.sh \
+#/ubuntu/install/zoom/install_zoom.sh \
+#/ubuntu/install/obs/install_obs.sh \
+#/ubuntu/install/thunderbird/install_thunderbird.sh \
+#/ubuntu/install/gamepad_utils/install_gamepad_utils.sh \
+#/ubuntu/install/chromium/install_chromium.sh \
+#/ubuntu/install/firefox/install_firefox.sh \
+
+RUN sudo add-apt-repository multiverse -y
+RUN sudo apt-get update 
+RUN apt install -y python3-pip 
+## change language back to en_AU
+RUN apt install language-pack-en-base language-pack-en
+RUN locale-gen en_AU
+RUN sudo update-locale LANG=en_AU
+
+RUN apt install -y htop
+# RUN pip install ultralytics
+RUN pip3 install ultralytics
+
+RUN wget https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+RUN sudo dpkg -i packages-microsoft-prod.deb
+RUN wget https://download.visualstudio.microsoft.com/download/pr/16b0b1af-6eab-4f9e-b9a4-9b29f6a1d681/4624e54b61cae05b1025211482f9c5e9/dotnet-sdk-7.0.400-linux-arm64.tar.gz
+
+RUN sudo apt-get install -y build-essential cmake git unzip pkg-config zlib1g-dev
+RUN sudo apt-get install -y libjpeg-dev libjpeg8-dev libjpeg-turbo8-dev
+RUN sudo apt-get install -y libpng-dev libtiff-dev libglew-dev
+RUN sudo apt-get install -y libavcodec-dev libavformat-dev libswscale-dev
+RUN sudo apt-get install -y libgtk2.0-dev libgtk-3-dev libcanberra-gtk*
+RUN sudo apt-get install -y python-dev python-numpy
+RUN sudo apt-get install -y python3-dev python3-numpy python3-pip
+RUN sudo apt-get install -y libxvidcore-dev libx264-dev libgtk-3-dev
+RUN sudo apt-get install -y libtbb2 libtbb-dev libdc1394-22-dev libxine2-dev
+RUN sudo apt-get install -y gstreamer1.0-tools libgstreamer-plugins-base1.0-dev
+RUN sudo apt-get install -y libgstreamer-plugins-good1.0-dev
+RUN sudo apt-get install -y libv4l-dev v4l-utils qv4l2 
+# v4l2ucp 
+RUN sudo apt-get install -y libtesseract-dev libxine2-dev libpostproc-dev
+RUN sudo apt-get install -y libavresample-dev libvorbis-dev
+RUN sudo apt-get install -y libfaac-dev libmp3lame-dev libtheora-dev
+RUN sudo apt-get install -y libopencore-amrnb-dev libopencore-amrwb-dev
+RUN sudo apt-get install -y libopenblas-dev libatlas-base-dev libblas-dev
+RUN sudo apt-get install -y liblapack-dev liblapacke-dev libeigen3-dev gfortran
+RUN sudo apt-get install -y libhdf5-dev libprotobuf-dev protobuf-compiler
+RUN sudo apt-get install -y libgoogle-glog-dev libgflags-dev
+RUN pip3 install fschat
+ENV DOTNET_FILE dotnet-sdk-7.0.400-linux-arm64.tar.gz
+#RUN DOTNET_FILE=dotnet-sdk-7.0.100-linux-x64.tar.gz
+#RUN export DOTNET_ROOT=$(pwd)/.dotnet
+ENV DOTNET_ROOT $(pwd)/.dotnet
+
+RUN mkdir -p $DOTNET_ROOT && tar zxf $DOTNET_FILE -C $DOTNET_ROOT
+#RUN export PATH=$PATH:$DOTNET_ROOT:$DOTNET_ROOT/tools
+
+#RUN sudo apt-get update 
+#RUN sudo apt-get install -y dotnet-sdk-7.0
+#add media codecs etc, these are GPU driven after all
+
+
+
+# Copy install scripts
+COPY ./src/ $INST_DIR
+
+# Run installations
+RUN \
+  for SCRIPT in $INST_SCRIPTS; do \
+    bash ${INST_DIR}${SCRIPT}; \
+  done && \
+  $STARTUPDIR/set_user_permission.sh $HOME && \
+  rm -f /etc/X11/xinit/Xclients && \
+  chown 1000:0 $HOME && \
+  mkdir -p /home/kasm-user && \
+  chown -R 1000:0 /home/kasm-user && \
+  rm -Rf ${INST_DIR}
+
+
+COPY ./images/desktop6.png /usr/share/extra/backgrounds/bg_default.png
+# Userspace Runtime
+ENV HOME /home/kasm-user
+WORKDIR $HOME
+USER 1000
+
+# RUN \
+#   cd $HOME\
+#   wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh \
+#   chmod +x ./dotnet-install.sh \
+#   ./dotnet-install.sh --version latest --runtime aspnetcore 
+# RUN \
+#   echo 'export DOTNET_ROOT=$HOME/.dotnet' >> $HOME/.bashrc \
+#   echo 'export PATH=$PATH:$DOTNET_ROOT:$DOTNET_ROOT/tools' >> .bashrc
+
+
+CMD ["--tail-log"]
+
